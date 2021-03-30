@@ -18,7 +18,7 @@ type Config struct {
 @return コンフィグ
 */
 func LoadConfig() Config {
-	jsonString, err := ioutil.ReadFile("../config.json")
+	jsonString, err := ioutil.ReadFile("./config.json")
 	if err != nil {
 		log.Println(err)
 		os.Exit(1)
