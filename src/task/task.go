@@ -2,6 +2,7 @@ package task
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -44,13 +45,17 @@ func Task(discordSession *discordgo.Session, config config.Config) {
 		// Notionから未受注クエストを取得
 		notOrderdQuests, err = quest.GetQuestByStatus(config.NotionPageId, quest.NOT_ORDERD)
 		if err != nil {
-			return
+			log.Println(err)
+			time.Sleep(30 * time.Second)
+			continue
 		}
 
 		// チャンネルからメッセージを取得
 		messages, err := discordSession.ChannelMessages(channelId, 100, "1", "1", "1")
 		if err != nil {
-			return
+			log.Println(err)
+			time.Sleep(30 * time.Second)
+			continue
 		}
 		// 取得したメッセージリストをクエスト型リストに変換
 		postedQuests = parceMessagesToQuests(messages)
