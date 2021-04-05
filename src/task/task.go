@@ -11,6 +11,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
+type Channel struct {
+	name      string
+	channelId string
+}
+
 /** Notionから取得したクエスト */
 var notionQuests []quest.Quest
 
@@ -23,6 +28,9 @@ var err error
 /* 実行時の時刻 */
 var currentTime time.Time
 
+/* チャンネルID */
+var channelId string
+
 /**
 メインロジック
 @param ディスコードセッション
@@ -30,42 +38,65 @@ var currentTime time.Time
 */
 func Task(discordSession *discordgo.Session, config config.Config) {
 
-	/* チャンネルID */
-	channelId := config.ChannelId
+	channelNames := [...]string{quest.NOT_ORDERD,
+		quest.WAITING_FOR_REVIEW,
+		quest.WAITING_FOR_FINAL_REVIEW}
 
-	// 初回起動時、チャンネル内のメッセージをクリア
-	// messageDeleteAll(discordSession, channelId)
+	var channels []Channel
+
+	for _, channelName := range channelNames {
+		var channel Channel
+
+		channel.name = channelName
+
+		if channelName == quest.NOT_ORDERD {
+			channel.channelId = config.NotOrderdChannel
+
+		} else if channelName == quest.WAITING_FOR_REVIEW {
+			channel.channelId = config.WaitingForReviewChannel
+
+		} else if channelName == quest.WAITING_FOR_FINAL_REVIEW {
+			channel.channelId = config.WaitingForFinalReviewChannel
+		}
+
+		channels = append(channels, channel)
+	}
 
 	// 定期実行タスク
 	for {
 
-		// 実行時の時刻を取得
-		currentTime = time.Now()
+		for _, channel := range channels {
 
-		// Notionから未受注クエストを取得
-		notionQuests, err = quest.GetQuestByStatus(config.NotionPageId, quest.NOT_ORDERD)
-		if err != nil {
-			log.Println(err)
-			time.Sleep(30 * time.Second)
-			continue
+			channelId = channel.channelId
+
+			// 実行時の時刻を取得
+			currentTime = time.Now()
+
+			// Notionから未受注クエストを取得
+			notionQuests, err = quest.GetQuestByStatus(config.NotionPageId, channel.name)
+			if err != nil {
+				log.Println(err)
+				time.Sleep(30 * time.Second)
+				continue
+			}
+
+			// チャンネルに投稿されているクエストを取得
+			postedQuests, err = getQuestsByChannel(discordSession, channelId)
+			if err != nil {
+				log.Println(err)
+				time.Sleep(30 * time.Second)
+				continue
+			}
+
+			// 未受注クエストとして取得されなかったメッセージを削除
+			deleteQuest(discordSession, channelId, postedQuests, notionQuests, currentTime, channel.name)
+
+			// 新規未受注クエストを投稿
+			messageCreateNewQuest(discordSession, channelId, notionQuests, postedQuests, currentTime, channel.name)
+
+			//　タイトルが変更されていれば修正
+			renameQuestTitle(discordSession, channelId, postedQuests, notionQuests)
 		}
-
-		// チャンネルに投稿されているクエストを取得
-		postedQuests, err = getQuestsByChannel(discordSession, config.ChannelId)
-		if err != nil {
-			log.Println(err)
-			time.Sleep(30 * time.Second)
-			continue
-		}
-
-		// 未受注クエストとして取得されなかったメッセージを削除
-		deleteQuest(discordSession, channelId, postedQuests, notionQuests, currentTime)
-
-		// 新規未受注クエストを投稿
-		messageCreateNewQuest(discordSession, channelId, notionQuests, postedQuests, currentTime)
-
-		//　タイトルが変更されていれば修正
-		renameQuestTitle(discordSession, channelId, postedQuests, notionQuests)
 
 		// コンフィグで設定した時間待機
 		time.Sleep(time.Duration(config.ProcessingSpan) * time.Second)
@@ -170,6 +201,7 @@ func editQuestMessage(discordSession *discordgo.Session, channelId string, messa
 
 	// クエストメッセージを送信
 	discordSession.ChannelMessageEdit(channelId, messageId, message)
+
 }
 
 /**
@@ -208,14 +240,15 @@ func deleteQuest(discordSession *discordgo.Session,
 	channnelId string,
 	postedQuests []quest.Quest,
 	notionQuests []quest.Quest,
-	currntTime time.Time) {
+	currntTime time.Time,
+	channelName string) {
 
-	for _, quespostedQuest := range postedQuests {
-		if !isQuestsArrayContains(quespostedQuest, notionQuests) {
-			discordSession.ChannelMessageDelete(channnelId, quespostedQuest.MessageId)
+	for _, postedQuest := range postedQuests {
+		if !isQuestsArrayContains(postedQuest, notionQuests) {
+			discordSession.ChannelMessageDelete(channnelId, postedQuest.MessageId)
 
 			// ログを出力
-			fmt.Printf("%v [削除] %v\n", currntTime, quespostedQuest.Title)
+			fmt.Printf("%v [%vクエスト][削除] %v\n", currntTime, channelName, postedQuest.Title)
 		}
 	}
 }
@@ -235,14 +268,15 @@ func messageCreateNewQuest(discordSession *discordgo.Session,
 	channnelId string,
 	notionQuests []quest.Quest,
 	postedQuests []quest.Quest,
-	currntTime time.Time) {
+	currntTime time.Time,
+	channelName string) {
 
-	for _, notOrderdQuest := range notionQuests {
-		if !isQuestsArrayContains(notOrderdQuest, postedQuests) {
-			sendQuestMessage(discordSession, channnelId, notOrderdQuest)
+	for _, notionQuest := range notionQuests {
+		if !isQuestsArrayContains(notionQuest, postedQuests) {
+			sendQuestMessage(discordSession, channnelId, notionQuest)
 
 			// ログを出力
-			fmt.Printf("%v [追加] %v\n", currntTime, notOrderdQuest.Title)
+			fmt.Printf("%v [%vクエスト][追加] %v\n", currntTime, channelName, notionQuest.Title)
 		}
 	}
 }

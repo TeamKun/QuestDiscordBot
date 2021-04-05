@@ -8,9 +8,11 @@ import (
 )
 
 type Config struct {
-	ChannelId      string `json:"channelId"`
-	NotionPageId   string `json:"notionPageId"`
-	ProcessingSpan int    `json:"processingSpan"`
+	NotOrderdChannel             string `json:"notOrderdChannel"`
+	WaitingForReviewChannel      string `json:"waitingForReviewChannel"`
+	WaitingForFinalReviewChannel string `json:"waitingForFinalReviewChannel"`
+	NotionPageId                 string `json:"notionPageId"`
+	ProcessingSpan               int    `json:"processingSpan"`
 }
 
 /**
