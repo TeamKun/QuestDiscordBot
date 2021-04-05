@@ -67,7 +67,7 @@ func Task(discordSession *discordgo.Session, config config.Config) {
 		messageCreateNewQuest(discordSession, channelId, notOrderdQuests, postedQuests, currentTime)
 
 		// コンフィグで設定した時間待機
-		time.Sleep(time.Duration(config.ProcessingSpan) * time.Minute)
+		time.Sleep(time.Duration(config.ProcessingSpan) * time.Second)
 	}
 }
 
