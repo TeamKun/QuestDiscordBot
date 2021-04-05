@@ -60,14 +60,14 @@ func Task(discordSession *discordgo.Session, config config.Config) {
 		// 取得したメッセージリストをクエスト型リストに変換
 		postedQuests = parceMessagesToQuests(messages)
 
-		// 未受注クエストとして取得されなかったメッセージを削除
+		// Notionから取得されなかったメッセージを削除
 		deleteQuest(discordSession, channelId, postedQuests, notOrderdQuests, currentTime)
 
-		// 新規未受注クエストを投稿
+		// Notionから新たに取得されたクエストを投稿
 		messageCreateNewQuest(discordSession, channelId, notOrderdQuests, postedQuests, currentTime)
 
 		// コンフィグで設定した時間待機
-		time.Sleep(time.Duration(config.ProcessingSpan) * time.Minute)
+		time.Sleep(time.Duration(config.ProcessingSpan) * time.Second)
 	}
 }
 
@@ -140,12 +140,13 @@ func parceMessagesToQuests(messages []*discordgo.Message) []quest.Quest {
 @params 投稿されているクエストリスト
 
 @params 未受注クエストリスト
+
 */
 func deleteQuest(discordSession *discordgo.Session,
 	channnelId string,
 	postedQuests []quest.Quest,
 	notOrderdQuests []quest.Quest,
-	currntTime time.Time) {
+	currntTime time.Time) []quest.Quest {
 
 	for _, quespostedQuest := range postedQuests {
 		if !isQuestsArrayContains(quespostedQuest, notOrderdQuests) {
@@ -203,6 +204,5 @@ func isQuestsArrayContains(quest quest.Quest, targetQuests []quest.Quest) bool {
 			return true
 		}
 	}
-
 	return false
 }
