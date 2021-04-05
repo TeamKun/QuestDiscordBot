@@ -5,12 +5,17 @@
 DISCORD_TOKEN　= DiscordBotトークン
 
 # config.json
+未受注クエストを投稿するチャンネルのID
+"notOrderdChannel": "1111"
 
-# クエストを投稿するチャンネルのID
-"channelId": "hoge"
+レビュー待ちクエストを投稿するチャンネルのID
+"waitingForReviewChannel": "2222",
 
-# クエスト取得元のNotionページID
-"notionPageId": "fuga"
+最終レビュー待ちクエストを投稿するチャンネルのID
+"waitingForReviewChannel": "3333",
 
-# 実行間隔(単位:分)
-"processingSpan": 5
+クエスト取得元のNotionページID
+"notionPageId": "4444"
+
+実行間隔(単位:秒)
+"processingSpan": 60
