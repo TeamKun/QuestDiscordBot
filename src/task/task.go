@@ -11,8 +11,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-/** 未受注クエスト */
-var notOrderdQuests []quest.Quest
+/** Notionから取得したクエスト */
+var notionQuests []quest.Quest
 
 /* チャンネルに投稿中のクエスト*/
 var postedQuests []quest.Quest
@@ -43,31 +43,67 @@ func Task(discordSession *discordgo.Session, config config.Config) {
 		currentTime = time.Now()
 
 		// Notionから未受注クエストを取得
-		notOrderdQuests, err = quest.GetQuestByStatus(config.NotionPageId, quest.NOT_ORDERD)
+		notionQuests, err = quest.GetQuestByStatus(config.NotionPageId, quest.NOT_ORDERD)
 		if err != nil {
 			log.Println(err)
 			time.Sleep(30 * time.Second)
 			continue
 		}
 
-		// チャンネルからメッセージを取得
-		messages, err := discordSession.ChannelMessages(channelId, 100, "1", "1", "1")
+		// チャンネルに投稿されているクエストを取得
+		postedQuests, err = getQuestsByChannel(discordSession, config.ChannelId)
 		if err != nil {
 			log.Println(err)
 			time.Sleep(30 * time.Second)
 			continue
 		}
-		// 取得したメッセージリストをクエスト型リストに変換
-		postedQuests = parceMessagesToQuests(messages)
 
 		// 未受注クエストとして取得されなかったメッセージを削除
-		deleteQuest(discordSession, channelId, postedQuests, notOrderdQuests, currentTime)
+		deleteQuest(discordSession, channelId, postedQuests, notionQuests, currentTime)
 
 		// 新規未受注クエストを投稿
-		messageCreateNewQuest(discordSession, channelId, notOrderdQuests, postedQuests, currentTime)
+		messageCreateNewQuest(discordSession, channelId, notionQuests, postedQuests, currentTime)
+
+		//　タイトルが変更されていれば修正
+		renameQuestTitle(discordSession, channelId, postedQuests, notionQuests)
 
 		// コンフィグで設定した時間待機
 		time.Sleep(time.Duration(config.ProcessingSpan) * time.Second)
+	}
+}
+
+/**
+タイトルが変更されていないかチェックし、変更されていれば投稿を修正
+
+@params ディスコードセッション
+
+@params チャンネルID
+
+@params チャンネルに投稿されているクエスト
+
+@params Notionから取得したクエスト
+*/
+func renameQuestTitle(discordSessin *discordgo.Session,
+	channelId string,
+	postedQuests []quest.Quest,
+	notionQuests []quest.Quest) {
+
+	for _, postedQuest := range postedQuests {
+		for _, notionQuest := range notionQuests {
+
+			// ページURLが一致しない
+			if postedQuest.PageUrl != notionQuest.PageUrl {
+				continue
+			}
+
+			// タイトルが一致
+			if postedQuest.Title == notionQuest.Title {
+				continue
+			}
+
+			// 投稿を修正
+			editQuestMessage(discordSessin, channelId, postedQuest.MessageId, notionQuest.Title, postedQuest.PageUrl)
+		}
 	}
 }
 
@@ -98,7 +134,9 @@ func messageDeleteAll(discordSessin *discordgo.Session, channelId string) {
 
 @param クエスト
 */
-func sendQuestMessage(discordSessin *discordgo.Session, channelId string, quest quest.Quest) {
+func sendQuestMessage(discordSessin *discordgo.Session,
+	channelId string,
+	quest quest.Quest) {
 	baseMessage := "**TITLE**\nURL"
 
 	// 文字列を置き換え
@@ -107,6 +145,31 @@ func sendQuestMessage(discordSessin *discordgo.Session, channelId string, quest 
 
 	// クエストメッセージを送信
 	discordSessin.ChannelMessageSend(channelId, message)
+}
+
+/**
+クエストメッセージを編集する
+
+@params ディスコードセッション
+
+@params メッセージID
+
+@params チャンネルID
+
+@params 修正後タイトル
+
+@params NotionのURL
+*/
+func editQuestMessage(discordSession *discordgo.Session, channelId string, messageId string, newTitle string, notionUrl string) {
+
+	baseMessage := "**TITLE**\nURL"
+
+	// 文字列を置き換え
+	message := strings.Replace(baseMessage, "TITLE", newTitle, 1)
+	message = strings.Replace(message, "URL", notionUrl, 1)
+
+	// クエストメッセージを送信
+	discordSession.ChannelMessageEdit(channelId, messageId, message)
 }
 
 /**
@@ -144,11 +207,11 @@ func parceMessagesToQuests(messages []*discordgo.Message) []quest.Quest {
 func deleteQuest(discordSession *discordgo.Session,
 	channnelId string,
 	postedQuests []quest.Quest,
-	notOrderdQuests []quest.Quest,
+	notionQuests []quest.Quest,
 	currntTime time.Time) {
 
 	for _, quespostedQuest := range postedQuests {
-		if !isQuestsArrayContains(quespostedQuest, notOrderdQuests) {
+		if !isQuestsArrayContains(quespostedQuest, notionQuests) {
 			discordSession.ChannelMessageDelete(channnelId, quespostedQuest.MessageId)
 
 			// ログを出力
@@ -170,11 +233,11 @@ func deleteQuest(discordSession *discordgo.Session,
 */
 func messageCreateNewQuest(discordSession *discordgo.Session,
 	channnelId string,
-	notOrderdQuests []quest.Quest,
+	notionQuests []quest.Quest,
 	postedQuests []quest.Quest,
 	currntTime time.Time) {
 
-	for _, notOrderdQuest := range notOrderdQuests {
+	for _, notOrderdQuest := range notionQuests {
 		if !isQuestsArrayContains(notOrderdQuest, postedQuests) {
 			sendQuestMessage(discordSession, channnelId, notOrderdQuest)
 
@@ -205,4 +268,27 @@ func isQuestsArrayContains(quest quest.Quest, targetQuests []quest.Quest) bool {
 	}
 
 	return false
+}
+
+/**
+チャンネルから投稿されたクエストリストを取得
+
+@params ディスコードセッション
+
+@params チャンネルID
+
+@return 投稿されているクエストリスト
+
+@return エラー
+*/
+func getQuestsByChannel(discordSession *discordgo.Session, channelId string) ([]quest.Quest, error) {
+	// チャンネルからメッセージを取得
+	messages, err := discordSession.ChannelMessages(channelId, 100, "1", "1", "1")
+	if err != nil {
+		log.Println(err)
+		time.Sleep(30 * time.Second)
+		return nil, err
+	}
+	// 取得したメッセージリストをクエスト型リストに変換
+	return parceMessagesToQuests(messages), nil
 }
