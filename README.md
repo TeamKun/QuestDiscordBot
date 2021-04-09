@@ -12,7 +12,7 @@ DISCORD_TOKEN　= DiscordBotトークン
 "waitingForReviewChannel": "2222",
 
 最終レビュー待ちクエストを投稿するチャンネルのID
-"waitingForReviewChannel": "3333",
+"waitingForFinalReviewChannel": "3333",
 
 クエスト取得元のNotionページID
 "notionPageId": "4444"
